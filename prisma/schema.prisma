@@ -1,0 +1,322 @@
+// FarmClient — Prisma schema
+// PostgreSQL 16. Mirrors the SRS data model (FR-01..FR-13).
+
+generator client {
+  provider      = "prisma-client-js"
+  // native = local dev; rhel target = Vercel serverless runtime.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")  // pooled (pgbouncer) connection for serverless
+  directUrl = env("DIRECT_URL")    // direct connection for migrations
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum MomoNetwork {
+  MTN
+  TELECEL
+  AIRTELTIGO
+}
+
+enum VerificationStatus {
+  unverified
+  pending
+  verified
+}
+
+enum Channel {
+  ussd
+  app
+  agent
+  web
+}
+
+enum BuyerType {
+  restaurant
+  processor
+  exporter
+  supermarket
+  individual
+}
+
+enum StorageCondition {
+  field_fresh
+  stored
+  processed
+}
+
+enum DeliveryMethod {
+  buyer_collects
+  farmer_delivers
+  agent
+}
+
+enum ListingStatus {
+  active
+  reserved
+  partial
+  sold
+  expired
+  cancelled
+}
+
+enum OrderStatus {
+  pending_payment
+  confirmed
+  in_progress
+  delivered
+  disputed
+  completed
+  cancelled
+}
+
+enum TxType {
+  collection
+  disbursement
+  loan
+  loan_repayment
+}
+
+enum TxDirection {
+  inbound
+  outbound
+}
+
+enum TxStatus {
+  pending
+  success
+  failed
+}
+
+enum LoanStatus {
+  active
+  repaid
+  defaulted
+}
+
+enum SmsStatus {
+  pending
+  sent
+  delivered
+  failed
+}
+
+// ─────────────────────────── Models ───────────────────────────
+
+model Farmer {
+  id            String             @id @default(uuid()) @db.Uuid
+  farmvaultId   String             @unique @map("farmvault_id") @db.VarChar(20)
+  fullName      String             @map("full_name") @db.VarChar(255)
+  phoneNumber   String             @unique @map("phone_number") @db.VarChar(20)
+  ghanaCardHash String?            @map("ghana_card_hash") @db.VarChar(128) // hashed (Act 843)
+  ghanaCardLast String?            @map("ghana_card_last") @db.VarChar(8)  // last chars for display
+  district      String             @db.VarChar(100)
+  region        String             @db.VarChar(100)
+  momoNumber    String             @map("momo_number") @db.VarChar(20)
+  momoNetwork   MomoNetwork        @map("momo_network")
+  crops         String[]           @default([])
+  farmSizeAcres Decimal?           @map("farm_size_acres") @db.Decimal(8, 2)
+  verification  VerificationStatus @default(unverified)
+  farmScore     Int                @default(0) @map("farm_score")
+  onTimeRate    Float              @default(1) @map("on_time_rate")
+  ratingSum     Int                @default(0) @map("rating_sum")
+  ratingCount   Int                @default(0) @map("rating_count")
+  listingAccuracy Float            @default(1) @map("listing_accuracy")
+  totalRevenue  Decimal            @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  totalOrders   Int                @default(0) @map("total_orders")
+  firebaseUid   String?            @unique @map("firebase_uid") @db.VarChar(255)
+  regChannel    Channel            @default(ussd) @map("reg_channel")
+  smsOptIn      Boolean            @default(true) @map("sms_opt_in")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  listings Listing[]
+  orders   Order[]
+  loans    Loan[]
+
+  @@index([region])
+  @@index([phoneNumber])
+  @@map("farmers")
+}
+
+model Buyer {
+  id           String     @id @default(uuid()) @db.Uuid
+  firebaseUid  String?    @unique @map("firebase_uid") @db.VarChar(255)
+  fullName     String     @map("full_name") @db.VarChar(255)
+  email        String?    @unique @db.VarChar(255)
+  passwordHash String?    @map("password_hash") @db.VarChar(255)
+  phoneNumber  String?    @map("phone_number") @db.VarChar(20)
+  businessName String?    @map("business_name") @db.VarChar(255)
+  businessType BuyerType? @map("business_type")
+  district     String?    @db.VarChar(100)
+  monthlyVolume Decimal?  @map("monthly_volume") @db.Decimal(12, 2)
+  isVerified   Boolean    @default(false) @map("is_verified")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  orders Order[]
+
+  @@map("buyers")
+}
+
+model Agent {
+  id          String   @id @default(uuid()) @db.Uuid
+  firebaseUid String?  @unique @map("firebase_uid") @db.VarChar(255)
+  fullName    String   @map("full_name") @db.VarChar(255)
+  email       String?  @db.VarChar(255)
+  region      String   @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agents")
+}
+
+model Listing {
+  id          String           @id @default(uuid()) @db.Uuid
+  listingRef  String           @unique @map("listing_ref") @db.VarChar(20)
+  farmerId    String           @map("farmer_id") @db.Uuid
+  cropType    String           @map("crop_type") @db.VarChar(50)
+  quantityKg  Decimal          @map("quantity_kg") @db.Decimal(10, 2)
+  qtyRemaining Decimal         @map("qty_remaining") @db.Decimal(10, 2)
+  pricePerKg  Decimal          @map("price_per_kg") @db.Decimal(8, 2)
+  aiPrice     Decimal?         @map("ai_price") @db.Decimal(8, 2)
+  harvestDate DateTime         @map("harvest_date") @db.Date
+  district    String           @db.VarChar(100)
+  region      String           @db.VarChar(100)
+  photos      String[]         @default([])
+  storage     StorageCondition?
+  deliveryMethod DeliveryMethod? @map("delivery_method")
+  status      ListingStatus    @default(active)
+  channel     Channel          @default(ussd)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt   DateTime?        @map("expires_at") @db.Timestamptz(6)
+
+  farmer Farmer  @relation(fields: [farmerId], references: [id])
+  orders Order[]
+
+  @@index([cropType])
+  @@index([region])
+  @@index([status])
+  @@map("listings")
+}
+
+model Order {
+  id           String         @id @default(uuid()) @db.Uuid
+  orderRef     String         @unique @map("order_ref") @db.VarChar(20)
+  listingId    String         @map("listing_id") @db.Uuid
+  farmerId     String         @map("farmer_id") @db.Uuid
+  buyerId      String         @map("buyer_id") @db.Uuid
+  cropType     String         @map("crop_type") @db.VarChar(50)
+  quantityKg   Decimal        @map("quantity_kg") @db.Decimal(10, 2)
+  pricePerKg   Decimal        @map("price_per_kg") @db.Decimal(8, 2)
+  subtotal     Decimal        @db.Decimal(12, 2)
+  platformFee  Decimal        @map("platform_fee") @db.Decimal(12, 2)
+  totalPaid    Decimal        @map("total_paid") @db.Decimal(12, 2)
+  escrowRef    String?        @map("escrow_ref") @db.VarChar(100)
+  payoutRef    String?        @map("payout_ref") @db.VarChar(100)
+  deliveryDate DateTime?      @map("delivery_date") @db.Date
+  deliveryMethod DeliveryMethod? @map("delivery_method")
+  deliveryPin  String?        @map("delivery_pin") @db.VarChar(6)
+  buyerReceiptConfirmed Boolean @default(false) @map("buyer_receipt_confirmed")
+  farmerDispatched Boolean    @default(false) @map("farmer_dispatched")
+  status       OrderStatus    @default(pending_payment)
+  farmerRating Int?           @map("farmer_rating")
+  buyerRating  Int?           @map("buyer_rating")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt  DateTime?      @map("completed_at") @db.Timestamptz(6)
+
+  listing      Listing       @relation(fields: [listingId], references: [id])
+  farmer       Farmer        @relation(fields: [farmerId], references: [id])
+  buyer        Buyer         @relation(fields: [buyerId], references: [id])
+  transactions Transaction[]
+
+  @@index([status])
+  @@index([farmerId])
+  @@index([buyerId])
+  @@map("orders")
+}
+
+model Transaction {
+  id          String      @id @default(uuid()) @db.Uuid
+  orderId     String?     @map("order_id") @db.Uuid
+  type        TxType
+  moolreRef   String?     @map("moolre_ref") @db.VarChar(100)
+  moolreTxId  String?     @map("moolre_txid") @db.VarChar(100)
+  externalRef String?     @unique @map("external_ref") @db.VarChar(100) // idempotency key
+  amount      Decimal     @db.Decimal(12, 2)
+  fee         Decimal     @default(0) @db.Decimal(12, 2)
+  direction   TxDirection
+  status      TxStatus
+  actorId     String?     @map("actor_id") @db.Uuid
+  actorType   String?     @map("actor_type") @db.VarChar(20)
+  // raw Moolre call log (request/response/latency) for audit
+  requestLog  Json?       @map("request_log")
+  responseLog Json?       @map("response_log")
+  latencyMs   Int?        @map("latency_ms")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([type])
+  @@map("transactions")
+}
+
+model Loan {
+  id              String     @id @default(uuid()) @db.Uuid
+  farmerId        String     @map("farmer_id") @db.Uuid
+  amount          Decimal    @db.Decimal(12, 2)
+  disbursementRef String?    @map("disbursement_ref") @db.VarChar(100)
+  repaidAmount    Decimal    @default(0) @map("repaid_amount") @db.Decimal(12, 2)
+  installments    Int        @default(3)
+  status          LoanStatus @default(active)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+  @@index([status])
+  @@map("loans")
+}
+
+model SmsLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  recipient   String    @db.VarChar(20)
+  message     String
+  templateKey String?   @map("template_key") @db.VarChar(50)
+  moolreRef   String?   @map("moolre_ref") @db.VarChar(100)
+  status      SmsStatus @default(pending)
+  sentAt      DateTime  @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  @@index([recipient])
+  @@map("sms_log")
+}
+
+model PriceHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  crop       String   @db.VarChar(50)
+  region     String   @db.VarChar(100)
+  pricePerKg Decimal  @map("price_per_kg") @db.Decimal(8, 2)
+  source     String   @default("internal") @db.VarChar(50)
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  @@index([crop, region, recordedAt])
+  @@map("price_history")
+}
+
+// Immutable audit trail for every state change (NFR: 7-year retention).
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  entity     String   @db.VarChar(50) // order / payment / disbursement / loan
+  entityId   String   @map("entity_id") @db.VarChar(100)
+  action     String   @db.VarChar(50)
+  prevState  String?  @map("prev_state") @db.VarChar(50)
+  newState   String?  @map("new_state") @db.VarChar(50)
+  actorId    String?  @map("actor_id") @db.VarChar(100)
+  actorType  String?  @map("actor_type") @db.VarChar(20)
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entity, entityId])
+  @@map("audit_log")
+}

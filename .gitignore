@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+serviceAccountKey.json
+.DS_Store
+prisma/*.db
+coverage/
+
+.vercel
