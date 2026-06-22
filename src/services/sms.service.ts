@@ -34,7 +34,38 @@ export const smsTemplates = {
     `FarmClient: A dispute has been raised on Order ${v.orderRef}. Our team will contact you within 24 hours.`,
 }
 
+/** Twi (Akan) variants of the SMS templates (SRS NFR: Twi localisation). */
+export const smsTemplatesTw = {
+  registration: (v: { name: string; farmvaultId: string }) =>
+    `Akwaaba ${v.name}! Wo FarmClient ID ne ${v.farmvaultId}. Frɛ *789# fa to wo nnɔbae.`,
+
+  newOrder: (v: { qty: string; crop: string; buyerName: string; orderRef: string; date: string }) =>
+    `FarmClient: Tɔdeɛ foforɔ ${v.qty}kg ${v.crop} firi ${v.buyerName}. Order: ${v.orderRef}. Fa ma ${v.date}. Frɛ *789# si so dua.`,
+
+  orderConfirmed: (v: { farmerName: string; orderRef: string; qty: string; crop: string; date: string }) =>
+    `FarmClient: ${v.farmerName} agye wo order ${v.orderRef} ma ${v.qty}kg ${v.crop}. Wɔbɛ de aba ${v.date}.`,
+
+  deliveryConfirmed: (v: { orderRef: string; amount: string; network: string; momo: string }) =>
+    `FarmClient: Order ${v.orderRef} aba. Yɛde GHS ${v.amount} rekɔ wo ${v.network} MoMo (${v.momo}).`,
+
+  payoutSuccess: (v: { amount: string; momo: string; orderRef: string }) =>
+    `FarmClient: GHS ${v.amount} akɔ ${v.momo} ma Order ${v.orderRef}. Yɛda wo ase!`,
+
+  priceAlert: (v: { crop: string; region: string; price: string; dir: string; pct: string }) =>
+    `FarmClient: ${v.crop} wɔ ${v.region} yɛ GHS ${v.price}/kg ɛnnɛ. ${v.dir} ${v.pct}%. Frɛ *789# fa to wo nnɔbae.`,
+
+  loanDisbursed: (v: { amount: string; momo: string }) =>
+    `FarmClient: Wo bosea GHS ${v.amount} akɔ ${v.momo}. Yɛbɛtwe afiri wo tɔ a edi so mmiɛnsa mu.`,
+
+  listingExpiring: (v: { crop: string; listingRef: string }) =>
+    `FarmClient: Wo ${v.crop} (${v.listingRef}) bɛba awieeɛ nnansa. Frɛ *789# fa foforɔ to.`,
+
+  disputeRaised: (v: { orderRef: string }) =>
+    `FarmClient: Asɛm aba Order ${v.orderRef} ho. Yɛbɛfrɛ wo wɔ nnɔnhwerew 24 mu.`,
+}
+
 export type SmsTemplateKey = keyof typeof smsTemplates
+export type Lang = 'en' | 'tw'
 
 /**
  * Send an SMS via Moolre and persist it to sms_log. Never throws — SMS is
@@ -67,13 +98,15 @@ export async function sendSms(
   }
 }
 
-/** Typed helper: render a template and send it. */
+/** Typed helper: render a template (in the given language) and send it. */
 export async function sendTemplate<K extends SmsTemplateKey>(
   recipient: string,
   key: K,
   vars: Parameters<(typeof smsTemplates)[K]>[0],
+  lang: Lang = 'en',
 ): Promise<void> {
+  const table = lang === 'tw' ? smsTemplatesTw : smsTemplates
   // @ts-expect-error — vars matches the template builder's parameter by construction
-  const message = smsTemplates[key](vars)
+  const message = table[key](vars)
   await sendSms(recipient, message, key)
 }

@@ -25,13 +25,18 @@ export async function runPriceAlerts() {
     if (!crop) { skipped++; continue }
     try {
       const p = await getPrice(crop, farmer.region)
-      await sendTemplate(farmer.phoneNumber, 'priceAlert', {
-        crop,
-        region: farmer.region,
-        price: money(p.price),
-        dir: p.trend === 'down' ? 'DOWN' : 'UP',
-        pct: String(Math.abs(p.changePct)),
-      })
+      await sendTemplate(
+        farmer.phoneNumber,
+        'priceAlert',
+        {
+          crop,
+          region: farmer.region,
+          price: money(p.price),
+          dir: p.trend === 'down' ? 'DOWN' : 'UP',
+          pct: String(Math.abs(p.changePct)),
+        },
+        farmer.language as 'en' | 'tw',
+      )
       sent++
     } catch {
       skipped++

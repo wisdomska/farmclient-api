@@ -130,6 +130,7 @@ model Farmer {
   firebaseUid   String?            @unique @map("firebase_uid") @db.VarChar(255)
   regChannel    Channel            @default(ussd) @map("reg_channel")
   smsOptIn      Boolean            @default(true) @map("sms_opt_in")
+  language      String             @default("en") @db.VarChar(5) // 'en' | 'tw'
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
   listings Listing[]

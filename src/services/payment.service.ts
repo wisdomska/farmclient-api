@@ -163,13 +163,18 @@ export async function onCollectionSuccess(externalref: string, moolreTxId?: stri
   await audit('order', order.orderRef, 'collection_success', 'pending_payment', 'confirmed')
 
   const date = order.deliveryDate ? order.deliveryDate.toISOString().slice(0, 10) : 'soon'
-  await sendTemplate(order.farmer.phoneNumber, 'newOrder', {
-    qty: String(order.quantityKg),
-    crop: order.cropType,
-    buyerName: order.buyer.fullName,
-    orderRef: order.orderRef,
-    date,
-  })
+  await sendTemplate(
+    order.farmer.phoneNumber,
+    'newOrder',
+    {
+      qty: String(order.quantityKg),
+      crop: order.cropType,
+      buyerName: order.buyer.fullName,
+      orderRef: order.orderRef,
+      date,
+    },
+    order.farmer.language as 'en' | 'tw',
+  )
   if (order.buyer.phoneNumber) {
     await sendTemplate(order.buyer.phoneNumber, 'orderConfirmed', {
       farmerName: order.farmer.fullName,
@@ -310,11 +315,12 @@ export async function onDisbursementSuccess(externalref: string, moolreTxId?: st
   // Recalculate score (awaited so it completes on serverless).
   await recalcFarmScore(order.farmerId).catch(() => undefined)
 
-  await sendTemplate(order.farmer.phoneNumber, 'payoutSuccess', {
-    amount: money(net),
-    momo: order.farmer.momoNumber,
-    orderRef: order.orderRef,
-  })
+  await sendTemplate(
+    order.farmer.phoneNumber,
+    'payoutSuccess',
+    { amount: money(net), momo: order.farmer.momoNumber, orderRef: order.orderRef },
+    order.farmer.language as 'en' | 'tw',
+  )
   return { handled: true }
 }
 

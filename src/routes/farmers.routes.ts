@@ -33,6 +33,7 @@ const patchSchema = z.object({
   momoNumber: z.string().min(1).optional(),
   farmSizeAcres: z.number().positive().optional(),
   smsOptIn: z.boolean().optional(),
+  language: z.enum(['en', 'tw']).optional(),
 })
 
 // POST /farmers/register
@@ -120,6 +121,7 @@ router.patch(
       updateData.farmSizeAcres = new Prisma.Decimal(body.farmSizeAcres)
     }
     if (body.smsOptIn !== undefined) updateData.smsOptIn = body.smsOptIn
+    if (body.language !== undefined) updateData.language = body.language
 
     const farmer = await prisma.farmer.update({
       where: { id: req.params.id },
