@@ -100,6 +100,40 @@ export async function initiateEscrow(orderId: string): Promise<MoolreResult> {
   return res
 }
 
+/**
+ * Resubmit an order's collection — used to complete Moolre's OTP verification
+ * (TP14). Reuses the same externalref (order_ref) and adds the otpcode.
+ */
+export async function retryCollection(orderId: string, otpcode?: string): Promise<MoolreResult> {
+  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { buyer: true } })
+  if (!order) throw new Error('Order not found')
+  if (order.status !== 'pending_payment') {
+    return { ok: true, code: 'TR099', message: 'Already confirmed', latencyMs: 0 }
+  }
+  const network = order.buyer.phoneNumber ? detectBuyerNetwork(order.buyer.phoneNumber) : 'MTN'
+  const res = await moolre.initiateCollection({
+    network,
+    payer: order.buyer.phoneNumber ?? '',
+    amount: Number(order.totalPaid),
+    externalref: order.orderRef,
+    reference: `FarmClient Order ${order.orderRef} - ${order.cropType} ${order.quantityKg}kg`,
+    otpcode,
+  })
+  await logTx({
+    orderId: order.id,
+    type: 'collection',
+    externalRef: order.orderRef,
+    amount: Number(order.totalPaid),
+    fee: Number(order.platformFee),
+    direction: 'inbound',
+    status: res.ok ? 'pending' : 'failed',
+    res,
+    actorId: order.buyerId,
+    actorType: 'buyer',
+  })
+  return res
+}
+
 function detectBuyerNetwork(phone: string) {
   // Buyers may pay from any network; default MTN if undetectable.
   // (helpers.detectNetwork imported lazily to avoid cycle is unnecessary; inline simple map)

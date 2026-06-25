@@ -84,13 +84,18 @@ export const moolre = {
     return CHANNEL.transfer[network]
   },
 
-  /** 1. COLLECTION — initiate buyer payment (escrow). Pushes a MoMo approval to payer. */
+  /**
+   * 1. COLLECTION — initiate buyer payment (escrow). Pushes a MoMo approval to
+   * payer. Moolre's flow may first return TP14 (OTP sent via SMS); resubmit the
+   * same call with `otpcode` to complete it → TR099.
+   */
   async initiateCollection(args: {
     network: MomoNetwork
     payer: string
     amount: number
     externalref: string
     reference: string
+    otpcode?: string
   }): Promise<MoolreResult> {
     return call('POST', '/open/transact/payment', 'private', {
       type: 1,
@@ -101,6 +106,7 @@ export const moolre = {
       externalref: args.externalref,
       reference: args.reference,
       accountnumber: env.moolre.accountNumber,
+      ...(args.otpcode ? { otpcode: args.otpcode } : {}),
     })
   },
 

@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import { prisma } from '../config/prisma'
 import { refs, normalizePhone, isValidGhanaMomo } from '../utils/helpers'
 import { env } from '../config/env'
-import { initiateEscrow, triggerPayout } from '../services/payment.service'
+import { initiateEscrow, triggerPayout, retryCollection } from '../services/payment.service'
 import { sendTemplate } from '../services/sms.service'
 import { recalcFarmScore } from '../services/score.service'
 
@@ -272,6 +272,21 @@ router.patch(
     }
 
     res.json({ ok: true, order })
+  }),
+)
+
+// POST /:id/pay — (re)submit the Moolre collection, optionally with an OTP
+// to complete TP14 verification. Returns Moolre's code (TR099 on success).
+const paySchema = z.object({ otpcode: z.string().optional() })
+router.post(
+  '/:id/pay',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { otpcode } = paySchema.parse(req.body)
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    if (!order) throw new HttpError(404, 'Order not found')
+    const payment = await retryCollection(order.id, otpcode)
+    res.json({ payment })
   }),
 )
 
