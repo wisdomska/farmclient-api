@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client'
 import { asyncHandler, HttpError } from '../middleware/error'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { prisma } from '../config/prisma'
-import { refs } from '../utils/helpers'
+import { refs, normalizePhone, isValidGhanaMomo } from '../utils/helpers'
 import { env } from '../config/env'
 import { initiateEscrow, triggerPayout } from '../services/payment.service'
 import { sendTemplate } from '../services/sms.service'
@@ -17,6 +17,8 @@ const placeOrderSchema = z.object({
   quantityKg: z.number().positive(),
   deliveryDate: z.string().datetime({ offset: true }).optional(),
   deliveryMethod: z.enum(['buyer_collects', 'farmer_delivers', 'agent']).optional(),
+  // Buyer's mobile-money number — the Moolre collection prompt is sent here.
+  payerPhone: z.string().optional(),
 })
 
 const receiveSchema = z.object({
@@ -78,6 +80,13 @@ router.post(
 
       return created
     })
+
+    // Set the buyer's MoMo number so Moolre sends the payment prompt there.
+    if (body.payerPhone) {
+      const payer = normalizePhone(body.payerPhone)
+      if (!isValidGhanaMomo(payer)) throw new HttpError(400, 'Invalid mobile money number')
+      await prisma.buyer.update({ where: { id: req.user!.buyerId! }, data: { phoneNumber: payer } })
+    }
 
     const payment = await initiateEscrow(order.id)
 
